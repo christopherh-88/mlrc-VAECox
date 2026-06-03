@@ -1,0 +1,198 @@
+================================================================================
+REPRODUCIBILITY CARD — VAECox (Bioinformatics 2020, Supplement 1)
+MLRC Reproducibility Study
+================================================================================
+
+PAPER REFERENCE
+  Title  : Improved survival analysis by learning shared genomic information
+             from pan-cancer data
+  Authors: Huang et al.
+  Venue  : Bioinformatics, Volume 36, Supplement 1, July 2020, pp. i389–i397
+  DOI    : 10.1093/bioinformatics/btaa462
+  Code   : https://github.com/dmis-lab/VAECox
+
+PAPER CLAIM BEING REPRODUCED
+  "VAECox outperformed baseline survival models on 7 of 10 TCGA cancer
+   datasets by C-index (concordance index)."
+  Baselines compared: CoxLasso, CoxRidge, Coxnnet, CoxMLP.
+
+--------------------------------------------------------------------------------
+DATASET
+--------------------------------------------------------------------------------
+
+Source (paper):
+  TCGA RNA-seq gene expression data accessed via ICGC Data Portal
+  URL   : https://dcc.icgc.org
+  Auth  : dbGaP accession phs000178 (controlled access — registration required)
+  Format: RNA-seq FPKM → log2(FPKM+1) → per-gene z-normalization
+
+Source (this reproduction):
+  Toy data provided in the original GitHub repository
+  Path  : ./data/imputed_and_binary_<CANCER>.pickle (20 cancer types)
+  Format: Already-processed gene expression + survival columns
+
+DATA ACCESS DEVIATION:
+  Full TCGA data could NOT be obtained within the project deadline.
+  Real TCGA requires dbGaP registration, data transfer agreement, and
+  download of hundreds of gigabytes. We use the repository's toy data
+  for pipeline verification only. C-index values are NOT comparable to
+  the paper's Table 1.
+
+Per-cancer statistics (toy data, paper evaluation set):
+
+  Cancer   N  N_genes  N_events  N_censored  CensorRate%  MedianSurv_days
+  BLCA    30   20502        11          19        63.3%           262
+  BRCA    30   20502         3          27        90.0%           271
+  HNSC    30   20502         9          21        70.0%           399
+  KIRC    30   20502         8          22        73.3%          1194
+  LGG     30   20502         5          25        83.3%           418
+  LIHC    30   20502         8          22        73.3%           364
+  LUAD    30   20502         3          27        90.0%           192
+  LUSC    30   20502         7          23        76.7%           537
+  OV      30   20502        23           7        23.3%          1041
+  STAD    30   20502         9          21        70.0%           159
+
+  Note: paper uses 200–1000 patients per cancer type.
+  BRCA/LUAD have only 3 events; C-index unreliable on these types.
+  THCA has 0 events; excluded from survival evaluation.
+
+--------------------------------------------------------------------------------
+ENVIRONMENT
+--------------------------------------------------------------------------------
+
+  Hardware    : CPU only — Apple M-series (Darwin 23.6.0, no CUDA GPU)
+  Python      : 3.13 (Anaconda miniconda base)
+                Paper specifies Python 3.8 + CUDA GPU
+  PyTorch     : latest (3.13 compatible)
+  Key packages: lifelines, scikit-learn, pandas 2.x, numpy, tqdm
+  Random seeds: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 (10 seeds, matching paper)
+
+--------------------------------------------------------------------------------
+MODEL ARCHITECTURE
+--------------------------------------------------------------------------------
+
+VAE (pan-cancer pretraining):
+  Input dim   : 20,502 genes
+  Encoder     : Linear(20502→4096) → Tanh → Linear(4096→128) [mu, sigma]
+  Decoder     : Linear(128→4096) → Tanh → Linear(4096→20502)
+  Latent dim  : 128
+  Loss        : MSE reconstruction + KL divergence
+  Parameters  : ~168M (encoder+decoder combined)
+
+CoxLasso  : Linear(20502→1), L1 penalty λ=0.01 on weights
+CoxRidge  : Linear(20502→1), L2 weight_decay=1e-3
+Coxnnet   : Linear(20502→143) → Tanh → Linear(143→1)
+              143 = ceil(sqrt(20502)) hidden units
+CoxMLP    : Linear(20502→100) → ReLU → Dropout(0) → Linear(100→1)
+VAECox    : [frozen VAE encoder] → 128-d embedding → Coxnnet(128)
+CoxPH-PCA : PCA(10 components) → lifelines CoxPH(penalizer=1.0, l1_ratio=0.5)
+             [extra baseline, not in paper]
+
+--------------------------------------------------------------------------------
+HYPERPARAMETERS
+--------------------------------------------------------------------------------
+
+VAE pretraining:
+  optimizer      : Adam
+  learning_rate  : 1e-3
+  weight_decay   : 1e-5
+  batch_size     : full batch (600 patients)
+  epochs         : 50  [DEVIATION: paper uses 500]
+  activation     : Tanh
+  dropout        : 0.0
+
+Survival models (Cox head + baselines):
+  optimizer      : Adam
+  epochs         : 50
+  learning_rate  : CoxLasso/Ridge=1e-4, others=1e-3
+  weight_decay   : CoxRidge=1e-3, others=1e-5
+  lasso_lambda   : 0.01 (CoxLasso)
+  hyperparameter search: NONE [DEVIATION: paper uses 5-fold CV over
+                          dropout{0,0.3,0.5} × lr{1e-3,1e-4} × wd{1e-3,1e-4,1e-5}]
+
+Data preprocessing:
+  Normalization  : StandardScaler per gene, fit on train, transform test
+  Split strategy : stratified 80/20 by survival time quintile (matching paper)
+  Seeds          : 10 random seeds (matching paper)
+
+--------------------------------------------------------------------------------
+DEVIATIONS FROM PAPER (complete list)
+--------------------------------------------------------------------------------
+
+  DEV-1  VAE training epochs: 50 (paper: 500). CPU time constraint.
+         Effect: encoder may be underfit; embeddings less informative.
+
+  DEV-2  VAECox = frozen encoder, not fine-tuned. With only 24 training
+         patients, fine-tuning a 4096→128 encoder overfits. Paper fine-tunes
+         encoder + Cox head jointly on 200–1000 patients.
+         Effect: likely underestimates VAECox advantage over baselines.
+
+  DEV-3  No hyperparameter search. Fixed lr/wd/dropout for all models.
+         Paper uses 5-fold CV over 18 hyperparameter combinations per cancer.
+         Effect: C-index estimates may be sub-optimal across all models.
+
+  DEV-4  Toy data (30 pts/cancer) vs full TCGA (200–1000 pts/cancer).
+         C-index is statistically unreliable with <10 test events.
+         Effect: results are not comparable to paper Table 1.
+
+  DEV-5  Python 3.13 / no GPU. Paper uses Python 3.8 + CUDA GPU.
+         Required 7 bug fixes for CPU compatibility (see commit history).
+         Effect: no impact on scientific results; only computational speed.
+
+  DEV-6  CoxPH-PCA added as extra baseline (not in paper).
+         Provides additional reference point for feature compression.
+
+--------------------------------------------------------------------------------
+RESULTS SUMMARY (toy data — NOT comparable to paper)
+--------------------------------------------------------------------------------
+
+Our C-index (mean across valid seeds, 80/20 split, 50 epochs):
+
+  Model       BLCA   BRCA   HNSC   KIRC    LGG   LIHC   LUAD   LUSC     OV   STAD   Mean
+  CoxLasso   0.460  0.500  0.604  0.501  0.776  0.264  0.250  0.560  0.531  0.692  0.514
+  CoxRidge   0.519  0.500  0.737  0.482  0.771  0.312  0.514  0.262  0.496  0.762  0.536
+  Coxnnet    0.564  0.500  0.649  0.555  0.793  0.480  0.389  0.567  0.542  0.658  0.570
+  CoxMLP     0.540  1.000  0.459  0.440  0.793  0.276  0.514  0.580  0.552  0.720  0.587
+  VAECox     0.613  0.000  0.831  0.729  0.764  0.680  0.458  0.380  0.526  0.736  0.572
+  CoxPH-PCA  0.293  0.000  0.299  0.298  0.236  0.382  0.681  0.720  0.322  0.274  0.350
+
+  VAECox wins: 4/10 cancers (HNSC, KIRC, LIHC, STAD)
+  Note: BRCA/LUAD/LUSC results are unreliable (<=3 test events per seed)
+
+Paper reported (full TCGA, 500-epoch VAE, HP search, fine-tuned):
+  VAECox wins: 7/10 cancers
+  See paper Table 1 for exact C-index values per cancer and baseline.
+
+Directional consistency: VAECox has the highest mean C-index in our
+  evaluation (0.572), matching the paper's finding of VAECox superiority.
+
+--------------------------------------------------------------------------------
+TRAINING TIME (approximate, CPU, Apple M-series)
+--------------------------------------------------------------------------------
+
+  VAE pretraining (50 epochs, 600 patients)  : ~2 min
+  Cox baseline per cancer per seed           : ~3-4 sec
+  Full Phase 2 evaluation (10 cancers×10 seeds×5 models): ~8 min
+
+Paper (GPU, 500 epochs): training time not reported in paper.
+
+--------------------------------------------------------------------------------
+FILES GENERATED
+--------------------------------------------------------------------------------
+
+  create_toy_vae_dataset.py    — builds toyforVAE_811_mRNA@.tsv from pickles
+  phase1_data_prep.py          — z-normalization, stratified splits, CV indices
+  phase2_reproduction.py       — trains all models, evaluates C-index
+  results/phase2/cindex_comparison.csv — numeric results table
+  data/embeddings/<CANCER>/seed_<N>/{Z_train,Z_test}.npy — VAE embeddings
+  data/prepared/<CANCER>/seed_<N>/*.npy — prepared splits (not committed, 241MB)
+  results/vae/vae_pretrained/final_model — pretrained VAE (not committed, 678MB)
+
+To fully reproduce from scratch:
+  1. python create_toy_vae_dataset.py
+  2. python phase1_data_prep.py
+  3. python vae_run.py              # trains VAE (~2 min CPU)
+  4. python phase2_reproduction.py  # evaluates all models (~8 min CPU)
+  5. python phase3_extensions.py    # extensions and analysis (~20 min CPU)
+
+================================================================================

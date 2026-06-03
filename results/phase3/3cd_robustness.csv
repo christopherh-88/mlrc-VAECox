@@ -1,0 +1,9 @@
+experiment,level,pct_or_sigma,CoxRidge,VAECox
+missing,0%,0.0,0.5809,0.614
+missing,10%,0.1,0.6484,0.6598
+missing,25%,0.25,0.5058,0.6528
+missing,50%,0.5,0.6676,0.6462
+noise,sigma=0.0,0.0,0.5473,0.7311
+noise,sigma=0.5,0.5,0.5538,0.6935
+noise,sigma=1.0,1.0,0.5531,0.66
+noise,sigma=2.0,2.0,0.6344,0.669

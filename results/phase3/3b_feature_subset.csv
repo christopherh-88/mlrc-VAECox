@@ -1,0 +1,6 @@
+k_genes,model,mean_cindex,n_valid_seeds
+100,CoxRidge,0.4946,40
+500,CoxRidge,0.4682,40
+1000,CoxRidge,0.583,40
+5000,CoxRidge,0.6207,40
+20502,CoxRidge,0.4624,40
