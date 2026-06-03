@@ -17,6 +17,7 @@ results/vae/
 results/saved_model/
 results/test_ci_dae.tsv
 results/logs/
+results/00000000/
 
 # Keep phase2 CSV results
 !results/phase2/
