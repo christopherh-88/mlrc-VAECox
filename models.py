@@ -22,7 +22,9 @@ class PartialNLL(nn.Module):
 
         # observed = ipcw_weights
 
-        num_observed = torch.sum(observed).cuda()
+        num_observed = torch.sum(observed)
+        if num_observed == 0:
+            return (theta * 0).sum()
         loss = -(torch.sum((theta.reshape(-1)- torch.log(torch.sum((exp_theta * R.t()), 0))) * observed) / num_observed)
 #        loss = loss.float()
 

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+
+# Large generated data files (rebuild with create_toy_vae_dataset.py)
+data/toyforVAE_811_mRNA@.tsv
+data/toyforVAE_mRNA@_binary.csv
+data/*.pickle
+
+# Prepared splits (rebuild with phase1_data_prep.py)
+data/prepared/
+
+# Trained model checkpoints and logs (too large for git)
+results/vae/
+results/saved_model/
+results/test_ci_dae.tsv
+results/logs/
+
+# Keep phase2 CSV results
+!results/phase2/
+
+# Jupyter / IDE
+.ipynb_checkpoints/
+.DS_Store

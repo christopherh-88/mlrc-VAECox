@@ -7,7 +7,6 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
-from progress.bar import Bar
 from tqdm import trange
 import math
 from sklearn.metrics import explained_variance_score, r2_score
@@ -347,7 +346,7 @@ class DAE(AE):
 
 	def forward(self, x, m=None, coo=None):
 		x = torch.randn(x.size()).to(self.device_type) * 0.01 + x
-		z = self.encode(xx)
+		z = self.encode(x)
 		recon = self.decode(z)
 		x = x * m if self.exclude_imp else x
 		recon = recon * m if self.exclude_imp else recon

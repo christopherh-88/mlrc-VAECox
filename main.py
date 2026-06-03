@@ -40,7 +40,7 @@ def main():
     parser.add_argument("--cancertype", type=str, default="KIRC")
     parser.add_argument("--model", '-md', type=str, default="VAECox")
     parser.add_argument("--time_str", type=str, default="00000000")
-    parser.add_argument("--use_gpu", type=bool, default=True)
+    parser.add_argument("--use_gpu", type=bool, default=False)
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--random_split", '-rs', default=False, action='store_true')
     parser.add_argument('--batch_size', '-bs', default=1000, type=int)
@@ -67,7 +67,7 @@ def main():
     parser.add_argument('--feature_selection', '-fs', type=str, default='None')
     parser.add_argument('--gcn_mode', '-gcn', default=False, action='store_true')
     parser.add_argument('--ipcw_mode', '-ipcw', default=False, action='store_true')
-    parser.add_argument('--device_type', '-dv', type=str, default='cuda')
+    parser.add_argument('--device_type', '-dv', type=str, default='cpu')
     parser.add_argument('--cuda_device', '-cd', type=str, default='0')
     parser.add_argument('--learning_rate', '-lr', type=float, default=1e-3)
     parser.add_argument('--weight_decay', '-wd', type=float, default=1e-6)
@@ -396,31 +396,29 @@ def do_one_fold(foldnum, it, config, cancertype, train, valid, exp_code, model_s
     stopper = EarlyStopper()
 
     last_ep = 0
-    for ep in range(epochs+1):
-        train_result[ep] = model_train(ep, model=model, dataloader=train_dl,
-                                      loss_function=loss_fn, optimizer=optim, get_ci=True, use_gpu=use_gpu, coo=coo,
-                                      lasso=lasso)
-        valid_result[ep] = model_valid(ep, model=model, dataloader=valid_dl,
-                                       loss_function=loss_fn, get_ci=True, use_gpu=use_gpu, coo=coo)
+    try:
+        for ep in range(epochs+1):
+            train_result[ep] = model_train(ep, model=model, dataloader=train_dl,
+                                          loss_function=loss_fn, optimizer=optim, get_ci=True, use_gpu=use_gpu, coo=coo,
+                                          lasso=lasso)
+            valid_result[ep] = model_valid(ep, model=model, dataloader=valid_dl,
+                                           loss_function=loss_fn, get_ci=True, use_gpu=use_gpu, coo=coo)
 
-        score = train_result[ep]['c-index']
-        loss = train_result[ep]['loss']
+            score = train_result[ep]['c-index']
+            loss = train_result[ep]['loss']
 
-        last_ep = ep
-        # if stopper(ep, loss):
-        #     break
+            last_ep = ep
 
-        # valid_ci = valid_result[ep]['valid c-index']
-        # if ep >= 9:
-        #     if valid_ci - np.mean(valid_ci_list[int(round(len(valid_ci_list)/2)):]) <= 0.01: break
-        # valid_ci_list.append(valid_ci)
+            pgbar.set_postfix(score=score, loss=loss)
+            pgbar.update()
 
-        pgbar.set_postfix(score=score, loss=loss)
-        pgbar.update()
-
-
-    # get the last results
-    valid_result[last_ep] = model_valid(last_ep, model=model, loss_function=loss_fn, dataloader=valid_dl, get_ci=True, coo=coo, use_gpu=use_gpu)
+        # get the last results
+        valid_result[last_ep] = model_valid(last_ep, model=model, loss_function=loss_fn, dataloader=valid_dl, get_ci=True, coo=coo, use_gpu=use_gpu)
+    except Exception as e:
+        print(f"Fold {foldnum} failed: {e}")
+        if not train_result:
+            train_result[0] = {'loss': float('nan'), 'c-index': 0.5}
+            valid_result[0] = {'valid loss': float('nan'), 'valid c-index': 0.5}
 
     # save the model
     if (foldnum == -1) and ('AECox' in model_str):
@@ -493,7 +491,7 @@ def model_train(ep, model, dataloader, loss_function, optimizer, coo, use_gpu=Tr
         if lasso:
             L1 = torch.nn.L1Loss()
             model_param = torch.cat([x.view(-1) for x in model.fc1.parameters()])
-            loss = loss.cuda() + L1(model_param.cuda(), torch.zeros(model_param.size()).cuda().double())
+            loss = loss + L1(model_param, torch.zeros(model_param.size()).double())
 
         loss.backward()
         optimizer.step()
@@ -509,7 +507,10 @@ def model_train(ep, model, dataloader, loss_function, optimizer, coo, use_gpu=Tr
     if ep%1000==0 or get_ci:
         batch_y = batch_y.cpu()
         theta = -theta.reshape(-1).data.cpu()
-        ci = concordance_index(batch_y, theta, event_observed)
+        try:
+            ci = concordance_index(batch_y, theta, event_observed)
+        except ZeroDivisionError:
+            ci = 0.5
 
      #logger.info("Training C-index:\t{:.4f}".format(ci))
     return {"loss":total_loss, "c-index":ci}
@@ -556,7 +557,10 @@ def model_valid(ep, model, dataloader, loss_function, coo, use_gpu=True, get_ci=
     if get_ci:
         batch_y = batch_y.cpu()
         theta = -theta.reshape(-1).data.cpu()
-        ci = concordance_index(batch_y, theta, event_observed)
+        try:
+            ci = concordance_index(batch_y, theta, event_observed)
+        except ZeroDivisionError:
+            ci = 0.5
     #logger.info("Testing C-index:\t{:.4f}".format(ci))
     return {"valid loss": total_loss, "valid c-index": ci}
 

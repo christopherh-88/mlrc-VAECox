@@ -59,6 +59,7 @@ def init_logging(config):
     console.setFormatter(fmt)
     LOGGER.addHandler(console)
     # For logfile writing
+    os.makedirs(config.checkpoint_dir + 'logs/', exist_ok=True)
     logfile = logging.FileHandler(
         config.checkpoint_dir + 'logs/' + ' '.join(sys.argv) + '.txt', 'w')
     logfile.setFormatter(fmt)

@@ -61,7 +61,7 @@ def get_dataset_811(config):
         # mf = mf.dropna(how='all',axis=1)
 
         # df = df.dropna(subset=['Cli@Days2Death', 'Cli@Days2FollowUp'], how='all')
-        df.fillna(0.0, axis=1, inplace=True)
+        df.fillna(0.0, inplace=True)
 
         # Dataset Split Train, Valid and Test
         df_train = df.loc[df['Fold@811'] == 0]
@@ -69,9 +69,9 @@ def get_dataset_811(config):
         df_test = df.loc[df['Fold@811'] == 2]
 
         for omic in config.omic_list:
-            data_dict['train'][omic] = df_train[[x for x in df_train.columns.get_values() if omic in x]]
-            data_dict['valid'][omic] = df_valid[[x for x in df_valid.columns.get_values() if omic in x]]
-            data_dict['test'][omic] = df_test[[x for x in df_test.columns.get_values() if omic in x]]
+            data_dict['train'][omic] = df_train[[x for x in df_train.columns if omic in x]]
+            data_dict['valid'][omic] = df_valid[[x for x in df_valid.columns if omic in x]]
+            data_dict['test'][omic] = df_test[[x for x in df_test.columns if omic in x]]
             data_dict['train'][omic + '_mask'] = mf.loc[df_train.index]
             data_dict['valid'][omic + '_mask'] = mf.loc[df_valid.index]
             data_dict['test'][omic + '_mask'] = mf.loc[df_test.index]
@@ -110,7 +110,7 @@ def _feature_selection(config, data_dict):
     if 'None' not in config.feature_selection:
         selected_genes = []
         for omic in config.omic_list:
-            old_genes = data_dict['train'][omic].columns.get_values()
+            old_genes = list(data_dict['train'][omic].columns)
             temp_genes = [g.split("|")[0] for g in old_genes]
             print(temp_genes)
             with open('./data/{}_genes.txt'.format(config.feature_selection), "r") as fr:
