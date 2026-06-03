@@ -45,7 +45,7 @@ def main():
     parser.add_argument("--random_split", '-rs', default=False, action='store_true')
     parser.add_argument('--batch_size', '-bs', default=1000, type=int)
     # find path to DAE
-    parser.add_argument('--pretrained', '-pr', default='results/vae/vae_pretrained/vae/final_model', type=str)
+    parser.add_argument('--pretrained', '-pr', default='results/vae/vae_pretrained/final_model', type=str)
     parser.add_argument('--weight_sparsity', type=int, default=0)
     parser.add_argument('--pool_func', '-pf', type=str, default='None')
     parser.add_argument('--eval', '-ev', default=False, action='store_true')

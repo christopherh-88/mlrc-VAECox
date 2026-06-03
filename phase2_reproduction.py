@@ -1,15 +1,17 @@
 """
 Phase 2: VAECox Reproduction — Model Comparison
 
-Models:
+Models (matching paper Table 1 baselines):
   CoxLasso   — linear Cox with L1 (LASSO) penalty on fc1 weights
   CoxRidge   — linear Cox with L2 (Ridge) penalty via weight_decay
   Coxnnet    — 2-layer neural Cox (sqrt(p) hidden units)
+  CoxMLP     — 2-layer MLP Cox (100 hidden units, ReLU, dropout)
   VAECox     — pretrained VAE encoder (frozen, 128-d) + Coxnnet head
                 Note: we freeze the encoder for speed (24 patients vs 4096+128
                 parameters makes end-to-end fine-tuning prone to collapse).
                 The paper fine-tunes fully on 200-1000 patients/cancer.
-  CoxPH-PCA  — lifelines Cox PH on top-10 PCA components (extra baseline)
+  CoxPH-PCA  — lifelines Cox PH on top-10 PCA components (extra baseline,
+                not in original paper)
 
 Evaluation:
   10 random seeds, 80/20 stratified train/test split (Phase 1 splits)
@@ -34,7 +36,7 @@ from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
 sys.path.insert(0, os.path.dirname(__file__))
-from models import CoxRegression, Coxnnet, PartialNLL
+from models import CoxRegression, Coxnnet, CoxMLP, PartialNLL
 import vae_models as vae_mod
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -232,6 +234,13 @@ def run_vaecox(Z_tr, y_tr, c_tr, Z_te, y_te, c_te, epochs=50) -> float:
                           lr=1e-3, wd=1e-5, epochs=epochs)
 
 
+def run_coxmlp(X_tr, y_tr, c_tr, X_te, y_te, c_te, epochs=50) -> float:
+    """2-layer MLP Cox (100 hidden units, ReLU + dropout=0). Paper baseline."""
+    model = CoxMLP(X_tr.shape[1], nhid=100, dropout=0.0)
+    return train_and_eval(model, X_tr, y_tr, c_tr, X_te, y_te, c_te,
+                          lr=1e-3, wd=1e-5, epochs=epochs)
+
+
 def run_coxph_pca(X_tr, y_tr, c_tr, X_te, y_te, c_te,
                   n_components=10, penalizer=1.0) -> float:
     try:
@@ -255,7 +264,7 @@ def run_coxph_pca(X_tr, y_tr, c_tr, X_te, y_te, c_te,
 
 # ── Main evaluation ────────────────────────────────────────────────────────────
 
-MODEL_NAMES = ['CoxLasso', 'CoxRidge', 'Coxnnet', 'VAECox', 'CoxPH-PCA']
+MODEL_NAMES = ['CoxLasso', 'CoxRidge', 'Coxnnet', 'CoxMLP', 'VAECox', 'CoxPH-PCA']
 
 
 def run_phase2(cancers=PAPER_10, seeds=range(10), epochs=50, verbose=True):
@@ -274,6 +283,8 @@ def run_phase2(cancers=PAPER_10, seeds=range(10), epochs=50, verbose=True):
                 run_coxridge(X_tr, y_tr, c_tr, X_te, y_te, c_te, epochs))
             results['Coxnnet'][cancer].append(
                 run_coxnnet(X_tr, y_tr, c_tr, X_te, y_te, c_te, epochs))
+            results['CoxMLP'][cancer].append(
+                run_coxmlp(X_tr, y_tr, c_tr, X_te, y_te, c_te, epochs))
             results['VAECox'][cancer].append(
                 run_vaecox(Z_tr, y_tr, c_tr, Z_te, y_te, c_te, epochs))
             results['CoxPH-PCA'][cancer].append(
@@ -341,7 +352,7 @@ def print_summary(results, cancers):
     print()
     print('Reference (paper, full TCGA data):')
     paper_wins = {
-        'CoxLasso': 0, 'CoxRidge': 0, 'Coxnnet': 2, 'VAECox': 7, 'CoxPH-PCA': 0
+        'CoxLasso': 0, 'CoxRidge': 0, 'Coxnnet': 2, 'CoxMLP': 1, 'VAECox': 7, 'CoxPH-PCA': 0
     }
     for m, w in sorted(paper_wins.items(), key=lambda x: -x[1]):
         bar = '█' * w
